@@ -58,7 +58,7 @@ var DEF={names:["Leandro","Melisa"],groups:[
  {id:"corrientes",name:"Gastos corrientes",pctA:65},
  {id:"viajes",name:"Viajes / imprevistos",pctA:50},
  {id:"obra",name:"Remodelación de la casa",pctA:65}]};
-var cfg=JSON.parse(JSON.stringify(DEF)),exps=[],tab="resumen",db=null,mode="local",month="",ld={c:0,e:0};
+var cfg=JSON.parse(JSON.stringify(DEF)),exps=[],tab="resumen",db=null,mode="local",month="",ld={c:0,e:0},sh=null;
 var fmt=function(n){return new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n)};
 var esc=function(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML};
 var uid=function(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)};
@@ -67,14 +67,18 @@ var today=function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMon
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 
+function rowOf(e){var s=share(e);return [e.id,e.date||"",e.kind,e.kind==="pago"?"Pago":e.desc,e.groupName||"",e.amount,cfg.names[e.payer],e.pctA,s[0],s[1],e.rec?"si":"no"]}
+function push(p){if(!sh||!sh.url||!sh.key)return;try{fetch(sh.url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({},p,{key:sh.key}))})}catch(e){}}
+function syncAll(){push({action:"replaceAll",rows:exps.slice().sort(function(x,y){return (x.date||"").localeCompare(y.date||"")}).map(rowOf)})}
 function saveCfg(){ if(mode==="db"){db.doc("config/main").set(cfg).catch(function(){})} else {lsSet("gp_cfg",cfg)} render(); }
-function saveExp(e){ if(mode==="db"){db.collection("expenses").doc(e.id).set(e).catch(function(){})} else {exps.push(e);lsSet("gp_exps",exps)} render(); }
-function delExp(id){ if(mode==="db"){db.collection("expenses").doc(id).delete().catch(function(){})} else {exps=exps.filter(function(x){return x.id!==id});lsSet("gp_exps",exps)} render(); }
+function saveExp(e){ if(mode==="db"){db.collection("expenses").doc(e.id).set(e).catch(function(){})} else {exps.push(e);lsSet("gp_exps",exps)} push({action:"upsert",row:rowOf(e)}); render(); }
+function delExp(id){ if(mode==="db"){db.collection("expenses").doc(id).delete().catch(function(){})} else {exps=exps.filter(function(x){return x.id!==id});lsSet("gp_exps",exps)} push({action:"delete",id:id}); render(); }
 
 function init(fdb){
   db=fdb;
   if(db){
     mode="db";
+    db.doc("config/sheets").onSnapshot(function(s){sh=s.exists?s.data():null},fe);
     db.doc("config/main").onSnapshot(function(s){if(s.exists){cfg=s.data()}ld.c=1;render();gen()},fe);
     db.collection("expenses").onSnapshot(function(q){exps=q.docs.map(function(d){var o=d.data();o.id=d.id;return o});ld.e=1;render();gen()},fe);
   } else {
@@ -156,13 +160,14 @@ function vGastos(){
    '<div class="card"><h2>Movimientos</h2>'+list+'</div>'+vRec()+'</div>';
 }
 
+function vSheet(){return '<div class="card full"><h2>Google Sheets</h2><div class="mut">Cada gasto nuevo, cambio o borrado se copia a tu hoja. Los datos de conexión se guardan en la base, que solo pueden leer ustedes dos.</div><label>URL del Apps Script (termina en /exec)</label><input id="su" value="'+esc(sh?sh.url:"")+'" placeholder="https://script.google.com/macros/s/.../exec"><label>Clave</label><input id="sk" type="password" value="'+esc(sh?sh.key:"")+'"><div class="two"><button class="p" id="ssave">Guardar conexión</button><button class="p" id="ssync">Sincronizar todo ahora</button></div><div class="mut" id="sst" style="margin-top:8px"></div></div>'}
 function vGrupos(){
   var g=cfg.groups.map(function(x,i){
     return '<div class="gcfg"><div style="display:flex;gap:8px"><input data-n="'+i+'" value="'+esc(x.name)+'"><button class="x" data-rm="'+i+'" title="Quitar grupo">×</button></div>'+
     '<div class="pct"><input type="range" min="0" max="100" step="5" value="'+x.pctA+'" data-r="'+i+'"><input type="number" min="0" max="100" value="'+x.pctA+'" data-pn="'+i+'"></div>'+
     '<div class="mut" id="gl'+i+'">'+esc(cfg.names[0])+' '+x.pctA+'% · '+esc(cfg.names[1])+' '+(100-x.pctA)+'%</div></div>'}).join("");
   return '<div class="grid"><div class="card"><h2>Nombres</h2><label>Persona 1 (porcentaje de arriba)</label><input id="n0" value="'+esc(cfg.names[0])+'"><label>Persona 2</label><input id="n1" value="'+esc(cfg.names[1])+'"></div>'+
-   '<div class="card"><h2>Grupos y % de aporte</h2><div class="mut">Cambiar un % no modifica los gastos ya cargados.</div>'+g+'<button class="s" id="addg" style="margin-top:12px">+ Agregar grupo</button></div></div>';
+   '<div class="card"><h2>Grupos y % de aporte</h2><div class="mut">Cambiar un % no modifica los gastos ya cargados.</div>'+g+'<button class="s" id="addg" style="margin-top:12px">+ Agregar grupo</button></div>'+vSheet()+'</div>';
 }
 
 function bind(){
@@ -199,6 +204,8 @@ function bind(){
       r.onchange=function(){saveCfg()}});
     document.querySelectorAll("[data-pn]").forEach(function(n){n.onchange=function(){setP(+n.dataset.pn,n.value);saveCfg()}});
     document.querySelectorAll("[data-rm]").forEach(function(b){b.onclick=function(){if(confirm("¿Quitar este grupo? Los gastos viejos se conservan."))cfg.groups.splice(+b.dataset.rm,1);saveCfg()}});
+    $("ssave").onclick=function(){var u=$("su").value.trim(),k=$("sk").value.trim();if(mode==="db")db.doc("config/sheets").set({url:u,key:k});sh={url:u,key:k};$("sst").textContent="Conexión guardada."};
+    $("ssync").onclick=function(){if(!sh||!sh.url||!sh.key){$("sst").textContent="Primero guardá la URL y la clave.";return}syncAll();$("sst").textContent="Enviado ("+exps.length+" movimientos). Revisá la hoja en unos segundos."};
     $("addg").onclick=function(){cfg.groups.push({id:uid(),name:"Nuevo grupo",pctA:50});saveCfg()};
   }
 }
