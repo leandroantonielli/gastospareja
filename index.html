@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Gastos de a dos</title>
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6b66;--ac:#0f766e;--ac2:#b45309;--bd:#e3e1da;--bad:#b91c1c;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151514;--card:#201f1d;--tx:#f0efe9;--mut:#a3a29a;--ac:#2dd4bf;--ac2:#fbbf24;--bd:#34332f;--bad:#f87171;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#151514;--card:#201f1d;--tx:#f0efe9;--mut:#a3a29a;--ac:#2dd4bf;--ac2:#fbbf24;--bd:#34332f;--bad:#f87171;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 12px}
+h2{font-size:15px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+nav{display:flex;gap:6px;margin-bottom:14px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:6px 0;z-index:5}
+nav button{flex:1;padding:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;font-size:15px;cursor:pointer}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}
+.grid{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:760px){.grid{grid-template-columns:1fr 1fr}.full{grid-column:1/-1}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.big{font-size:26px;font-weight:700}
+.mut{color:var(--mut);font-size:14px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input,select{width:100%;padding:11px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font-size:16px}
+button.p{width:100%;margin-top:14px;padding:12px;border:0;border-radius:10px;background:var(--ac);color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+button.s{padding:8px 12px;border:1px solid var(--bd);background:transparent;color:var(--tx);border-radius:8px;cursor:pointer}
+button.x{border:0;background:none;color:var(--bad);cursor:pointer;font-size:18px;padding:4px 8px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)}
+.row:last-child{border:0}
+.row>div:first-child{min-width:0}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--bg);border:1px solid var(--bd);color:var(--mut)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bar{height:8px;border-radius:99px;background:var(--ac2);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ac)}
+.gcfg{padding:12px 0;border-bottom:1px solid var(--bd)}
+.gcfg:last-child{border:0}
+.pct{display:flex;align-items:center;gap:10px;margin-top:8px}
+.pct input[type=range]{flex:1;padding:0}
+.pct input[type=number]{width:72px}
+.hide{display:none}
+.banner{font-size:13px;color:var(--mut);margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="wrap" id="login" style="max-width:380px;padding-top:60px"><div class="card"><h1>Gastos de a dos</h1><label>Mail</label><input id="le" type="email" autocomplete="username"><label>Contraseña</label><input id="lp" type="password" autocomplete="current-password"><div id="lerr" style="color:var(--bad);margin-top:8px;font-size:14px"></div><button class="p" id="lbtn">Ingresar</button></div></div>
+<div class="wrap hide" id="main">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h1>Gastos de a dos</h1><button class="s" id="out">Salir</button></div>
+  <div id="banner" class="banner"></div>
+  <nav id="nav"></nav>
+  <div id="app"></div>
+</div>
+<script>
+var DEF={names:["Leandro","Pareja"],groups:[
+ {id:"fijos",name:"Gastos fijos",pctA:65},
+ {id:"corrientes",name:"Gastos corrientes",pctA:65},
+ {id:"viajes",name:"Viajes / imprevistos",pctA:50},
+ {id:"obra",name:"Remodelación de la casa",pctA:65}]};
+var cfg=JSON.parse(JSON.stringify(DEF)),exps=[],tab="resumen",db=null,mode="local",month="",ld={c:0,e:0};
+var fmt=function(n){return new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n)};
+var esc=function(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML};
+var uid=function(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)};
+var today=function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+
+function saveCfg(){ if(mode==="db"){db.doc("config/main").set(cfg).catch(function(){})} else {lsSet("gp_cfg",cfg)} render(); }
+function saveExp(e){ if(mode==="db"){db.collection("expenses").doc(e.id).set(e).catch(function(){})} else {exps.push(e);lsSet("gp_exps",exps)} render(); }
+function delExp(id){ if(mode==="db"){db.collection("expenses").doc(id).delete().catch(function(){})} else {exps=exps.filter(function(x){return x.id!==id});lsSet("gp_exps",exps)} render(); }
+
+function init(fdb){
+  db=fdb;
+  if(db){
+    mode="db";
+    db.doc("config/main").onSnapshot(function(s){if(s.exists){cfg=s.data()}ld.c=1;render();gen()},fe);
+    db.collection("expenses").onSnapshot(function(q){exps=q.docs.map(function(d){var o=d.data();o.id=d.id;return o});ld.e=1;render();gen()},fe);
+  } else {
+    var c=lsGet("gp_cfg");if(c)cfg=c;exps=lsGet("gp_exps")||[];ld.c=ld.e=1;
+  }
+  render();gen();
+}
+
+function share(e){var a=e.amount*e.pctA/100;return [a,e.amount-a]}
+function inM(e){return !month||(e.date||"").slice(0,7)===month}
+function nxt(m){var p=m.split("-"),y=+p[0],n=+p[1]+1;if(n>12){n=1;y++}return y+"-"+String(n).padStart(2,"0")}
+function prv(m){var p=m.split("-"),y=+p[0],n=+p[1]-1;if(n<1){n=12;y--}return y+"-"+String(n).padStart(2,"0")}
+function gen(){
+  if(!(ld.c&&ld.e))return;
+  var rec=cfg.rec||[],t=today(),cm=t.slice(0,7),ch=false;
+  rec.forEach(function(r){
+    var m=nxt(r.last),n=0;
+    while(m<=cm&&n<36){
+      var dt=m+"-"+String(Math.min(r.day,28)).padStart(2,"0");
+      if(dt>t)break;
+      var gr=cfg.groups.find(function(x){return x.id===r.groupId});
+      saveExp({id:"rec-"+r.id+"-"+m,kind:"gasto",desc:r.desc,amount:r.amount,payer:r.payer,groupId:r.groupId,groupName:gr?gr.name:r.groupName,pctA:r.pctA!=null?r.pctA:(gr?gr.pctA:50),date:dt,rec:1});
+      r.last=m;ch=true;m=nxt(m);n++;
+    }
+  });
+  if(ch)saveCfg();
+}
+function vRec(){var r=cfg.rec||[];if(!r.length)return "";
+  return '<div class="card full"><h2>Gastos recurrentes</h2>'+r.map(function(x,i){return '<div class="row"><div><b>'+esc(x.desc)+'</b><div class="mut">Día '+x.day+' · pagó '+esc(cfg.names[x.payer])+' · '+esc(x.groupName||"")+(x.pctA!=null?' · '+x.pctA+'/'+(100-x.pctA):'')+'</div></div><div style="display:flex;align-items:center;gap:6px"><input data-ra="'+i+'" type="number" value="'+x.amount+'" style="width:120px"><button class="x" data-rr="'+i+'" title="Quitar">×</button></div></div>'}).join("")+'<div class="mut" style="margin-top:8px">Se cargan solos cada mes desde el día indicado. Cambiar el monto aplica a los meses siguientes.</div></div>'}
+function balance(){
+  var net=0,tot=[0,0],byG={};
+  exps.forEach(function(e){
+    var s=share(e);
+    net+=(e.payer===0?e.amount:0)-s[0];
+    if(e.kind!=="pago"&&inM(e)){tot[0]+=s[0];tot[1]+=s[1];var k=e.groupName||"Sin grupo";byG[k]=byG[k]||{t:0,a:0};byG[k].t+=e.amount;byG[k].a+=s[0]}
+  });
+  return {net:net,tot:tot,byG:byG};
+}
+
+function render(){
+  document.getElementById("banner").textContent=mode==="db"?"Datos compartidos en tiempo real entre quienes tengan acceso a esta página.":"Modo local: los datos se guardan solo en este dispositivo.";
+  var tabs=[["resumen","Resumen"],["gastos","Gastos"],["grupos","Grupos"]];
+  document.getElementById("nav").innerHTML=tabs.map(function(t){return '<button data-t="'+t[0]+'" class="'+(tab===t[0]?"on":"")+'">'+t[1]+'</button>'}).join("");
+  document.querySelectorAll("#nav button").forEach(function(b){b.onclick=function(){tab=b.dataset.t;render()}});
+  var app=document.getElementById("app");
+  var fb='<div class="card" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="mut">Mes</span><input type="month" id="mf" value="'+month+'" style="width:auto"><button class="s" id="mall">Todos</button><button class="s" id="csv" style="margin-left:auto">Descargar CSV</button></div>';
+  app.innerHTML=(tab==="grupos"?"":fb)+(tab==="resumen"?vResumen():tab==="gastos"?vGastos():vGrupos());
+  bind();
+}
+
+function vResumen(){
+  var b=balance(),A=cfg.names[0],B=cfg.names[1],txt;
+  if(Math.abs(b.net)<1)txt="Están a mano";
+  else if(b.net>0)txt=esc(B)+" le debe "+fmt(b.net)+" a "+esc(A);
+  else txt=esc(A)+" le debe "+fmt(-b.net)+" a "+esc(B);
+  var g=Object.keys(b.byG).map(function(k){var o=b.byG[k],p=o.t?o.a/o.t*100:0;
+    return '<div class="row" style="display:block"><div style="display:flex;justify-content:space-between"><b>'+esc(k)+'</b><span>'+fmt(o.t)+'</span></div><div class="bar"><i style="width:'+p+'%"></i></div><div class="mut">'+esc(A)+' '+fmt(o.a)+' · '+esc(B)+' '+fmt(o.t-o.a)+'</div></div>'}).join("")||'<div class="mut">Todavía no hay gastos.</div>';
+  return '<div class="grid"><div class="card"><h2>Saldo acumulado</h2><div class="big">'+txt+'</div>'+
+    '<h2 style="margin-top:18px">Registrar pago entre ustedes</h2><div class="two"><div><label>Paga</label><select id="sp">'+
+    '<option value="0">'+esc(A)+'</option><option value="1">'+esc(B)+'</option></select></div><div><label>Monto</label><input id="sa" type="number" inputmode="decimal" placeholder="0"></div></div><button class="p" id="sbtn">Registrar pago</button></div>'+
+    '<div class="card"><h2>Lo que le corresponde a cada uno</h2><div class="big" style="font-size:20px">'+esc(A)+': '+fmt(b.tot[0])+'<br>'+esc(B)+': '+fmt(b.tot[1])+'</div></div>'+
+    '<div class="card full"><h2>Por grupo'+(month?" · "+month:" · todo el período")+'</h2>'+g+'</div></div>';
+}
+
+function opts(){return cfg.groups.map(function(g){return '<option value="'+g.id+'">'+esc(g.name)+' ('+g.pctA+'/'+(100-g.pctA)+')</option>'}).join("")}
+function vGastos(){
+  var A=cfg.names[0],B=cfg.names[1];
+  var list=exps.filter(inM).slice().sort(function(x,y){return (y.date||"").localeCompare(x.date||"")||y.id.localeCompare(x.id)}).map(function(e){
+    var s=share(e),who=cfg.names[e.payer]||"?";
+    var title=e.kind==="pago"?"Pago de "+esc(who)+" a "+esc(cfg.names[1-e.payer]):esc(e.desc);
+    return '<div class="row"><div><b>'+title+'</b><div class="mut">'+esc(e.date||"")+' · pagó '+esc(who)+(e.kind==="pago"?"":' <span class="tag">'+esc(e.groupName||"")+' '+e.pctA+'/'+(100-e.pctA)+'</span>')+'</div></div><div style="text-align:right;white-space:nowrap"><b>'+fmt(e.amount)+'</b><button class="x" data-del="'+e.id+'" title="Borrar">×</button></div></div>'}).join("")||'<div class="mut">Sin movimientos todavía.</div>';
+  return '<div class="grid"><div class="card"><h2>Nuevo gasto</h2>'+
+   '<label>Descripción</label><input id="d" placeholder="Ej: Supermercado">'+
+   '<label>Monto</label><input id="a" type="number" inputmode="decimal" placeholder="0">'+
+   '<label>Grupo</label><select id="g">'+opts()+'</select>'+
+   '<div class="two"><div><label>Pagó</label><select id="p"><option value="0">'+esc(A)+'</option><option value="1">'+esc(B)+'</option></select></div>'+
+   '<div><label>Fecha</label><input id="f" type="date" value="'+today()+'"></div></div>'+
+   '<label>% de '+esc(A)+' en este gasto (opcional: reemplaza al del grupo)</label><input id="cp" type="number" min="0" max="100" inputmode="decimal" placeholder="Ej: 50">'+'<label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input id="rc" type="checkbox" style="width:auto"> Repetir todos los meses</label>'+'<div class="mut" id="prev" style="margin-top:10px"></div><button class="p" id="add">Agregar gasto</button></div>'+
+   '<div class="card"><h2>Movimientos</h2>'+list+'</div>'+vRec()+'</div>';
+}
+
+function vGrupos(){
+  var g=cfg.groups.map(function(x,i){
+    return '<div class="gcfg"><div style="display:flex;gap:8px"><input data-n="'+i+'" value="'+esc(x.name)+'"><button class="x" data-rm="'+i+'" title="Quitar grupo">×</button></div>'+
+    '<div class="pct"><input type="range" min="0" max="100" step="5" value="'+x.pctA+'" data-r="'+i+'"><input type="number" min="0" max="100" value="'+x.pctA+'" data-pn="'+i+'"></div>'+
+    '<div class="mut" id="gl'+i+'">'+esc(cfg.names[0])+' '+x.pctA+'% · '+esc(cfg.names[1])+' '+(100-x.pctA)+'%</div></div>'}).join("");
+  return '<div class="grid"><div class="card"><h2>Nombres</h2><label>Persona 1 (porcentaje de arriba)</label><input id="n0" value="'+esc(cfg.names[0])+'"><label>Persona 2</label><input id="n1" value="'+esc(cfg.names[1])+'"></div>'+
+   '<div class="card"><h2>Grupos y % de aporte</h2><div class="mut">Cambiar un % no modifica los gastos ya cargados.</div>'+g+'<button class="s" id="addg" style="margin-top:12px">+ Agregar grupo</button></div></div>';
+}
+
+function bind(){
+  var $=function(i){return document.getElementById(i)};
+  if($("mf")){$("mf").onchange=function(){month=this.value;render()};$("mall").onclick=function(){month="";render()};
+    $("csv").onclick=async function(){var q=function(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'};
+      var h=["fecha","tipo","descripcion","grupo","monto","pago","pct_"+cfg.names[0],"parte_"+cfg.names[0],"parte_"+cfg.names[1],"recurrente"];
+      var rows=exps.slice().sort(function(x,y){return (x.date||"").localeCompare(y.date||"")}).map(function(e){var s=share(e);return [e.date,e.kind,e.kind==="pago"?"Pago":e.desc,e.groupName,e.amount,cfg.names[e.payer],e.pctA,s[0],s[1],e.rec?"si":"no"].map(q).join(",")});
+      var b=new Blob(["\ufeff"+[h.map(q).join(",")].concat(rows).join("\n")],{type:"text/csv"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="gastos.csv";a.click()}}
+  document.querySelectorAll("[data-ra]").forEach(function(i){i.onchange=function(){var v=parseFloat(i.value);if(v>0){cfg.rec[+i.dataset.ra].amount=v;saveCfg()}}});
+  document.querySelectorAll("[data-rr]").forEach(function(b){b.onclick=function(){if(confirm("¿Quitar este recurrente? Los gastos ya cargados se conservan.")){cfg.rec.splice(+b.dataset.rr,1);saveCfg()}}});
+  document.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){if(confirm("¿Borrar este movimiento?"))delExp(b.dataset.del)}});
+  if($("sbtn"))$("sbtn").onclick=function(){var m=parseFloat($("sa").value);if(!(m>0))return;var p=parseInt($("sp").value,10);
+    saveExp({id:uid(),kind:"pago",desc:"Pago",amount:m,payer:p,pctA:p===0?0:100,date:today(),groupName:"Pagos"})};
+  if($("add")){
+    var prev=function(){var gr=cfg.groups.find(function(x){return x.id===$("g").value});var m=parseFloat($("a").value)||0;
+      var c=parseFloat($("cp").value),pa=gr?(isNaN(c)?gr.pctA:Math.max(0,Math.min(100,c))):0;
+      if(gr)$("prev").textContent=cfg.names[0]+" "+fmt(m*pa/100)+" · "+cfg.names[1]+" "+fmt(m*(100-pa)/100)};
+    $("cp").oninput=prev;$("a").oninput=prev;$("g").onchange=prev;prev();
+    $("add").onclick=function(){var m=parseFloat($("a").value),d=$("d").value.trim(),gr=cfg.groups.find(function(x){return x.id===$("g").value});
+      if(!(m>0)||!d||!gr){alert("Completá descripción, monto y grupo.");return}
+      var cp=$("cp").value.trim(),pa=cp===""?gr.pctA:Math.max(0,Math.min(100,parseFloat(cp)));if(isNaN(pa))pa=gr.pctA;
+      var dt=$("f").value||today(),py=parseInt($("p").value,10);
+      if($("rc").checked){cfg.rec=cfg.rec||[];cfg.rec.push({id:uid(),desc:d,amount:m,payer:py,groupId:gr.id,groupName:gr.name,pctA:cp===""?null:pa,day:parseInt(dt.slice(8,10),10)||1,last:prv(dt.slice(0,7))});saveCfg();gen();return}
+      saveExp({id:uid(),kind:"gasto",desc:d,amount:m,payer:py,groupId:gr.id,groupName:gr.name,pctA:pa,date:dt})};
+  }
+  if($("n0")){
+    $("n0").onchange=function(){cfg.names[0]=this.value.trim()||"Persona 1";saveCfg()};
+    $("n1").onchange=function(){cfg.names[1]=this.value.trim()||"Persona 2";saveCfg()};
+    document.querySelectorAll("[data-n]").forEach(function(i){i.onchange=function(){cfg.groups[+i.dataset.n].name=i.value.trim()||"Grupo";saveCfg()}});
+    var setP=function(i,v){v=Math.max(0,Math.min(100,Math.round(+v||0)));cfg.groups[i].pctA=v;return v};
+    document.querySelectorAll("[data-r]").forEach(function(r){var i=+r.dataset.r;
+      r.oninput=function(){var v=setP(i,r.value);document.querySelector('[data-pn="'+i+'"]').value=v;document.getElementById("gl"+i).textContent=cfg.names[0]+" "+v+"% · "+cfg.names[1]+" "+(100-v)+"%"};
+      r.onchange=function(){saveCfg()}});
+    document.querySelectorAll("[data-pn]").forEach(function(n){n.onchange=function(){setP(+n.dataset.pn,n.value);saveCfg()}});
+    document.querySelectorAll("[data-rm]").forEach(function(b){b.onclick=function(){if(confirm("¿Quitar este grupo? Los gastos viejos se conservan."))cfg.groups.splice(+b.dataset.rm,1);saveCfg()}});
+    $("addg").onclick=function(){cfg.groups.push({id:uid(),name:"Nuevo grupo",pctA:50});saveCfg()};
+  }
+}
+function fe(){alert("No se pudo acceder a los datos. Revisá las reglas de Firestore y que hayas iniciado sesión.")}
+render();
+</script>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,doc,collection,setDoc,deleteDoc,onSnapshot} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyC3GWLS5izvubS-IA5fRBLrnmWrkhhm5AU",authDomain:"gastosconvivencia.firebaseapp.com",projectId:"gastosconvivencia",storageBucket:"gastosconvivencia.firebasestorage.app",messagingSenderId:"517983384320",appId:"1:517983384320:web:562be90e2fb2b380bab9e5"});
+const auth=getAuth(app),fs=getFirestore(app),$=id=>document.getElementById(id);
+const clean=v=>JSON.parse(JSON.stringify(v));
+const shim={
+ doc:p=>{const r=doc(fs,p);return {set:v=>setDoc(r,clean(v)),onSnapshot:(cb,er)=>onSnapshot(r,s=>cb({exists:s.exists(),data:()=>s.data()}),er)}},
+ collection:c=>{const cr=collection(fs,c);return {
+  doc:id=>{const r=doc(fs,c,id);return {set:v=>setDoc(r,clean(v)),delete:()=>deleteDoc(r)}},
+  onSnapshot:(cb,er)=>onSnapshot(cr,q=>cb({docs:q.docs.map(d=>({id:d.id,data:()=>d.data()}))}),er)}}};
+let started=false;
+onAuthStateChanged(auth,u=>{
+ if(u){$("login").classList.add("hide");$("main").classList.remove("hide");if(!started){started=true;window.init(shim)}}
+ else{if(started){location.reload();return}$("main").classList.add("hide");$("login").classList.remove("hide")}
+});
+const go=async()=>{$("lerr").textContent="";try{await signInWithEmailAndPassword(auth,$("le").value.trim(),$("lp").value)}catch(e){$("lerr").textContent="Mail o contraseña incorrectos."}};
+$("lbtn").onclick=go;$("lp").addEventListener("keydown",e=>{if(e.key==="Enter")go()});
+$("out").onclick=()=>signOut(auth);
+</script>
+</body>
+</html>
